@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
     std::cout << "--- HFT Backtesting System - Comprehensive Multi-Strategy & Multi-Dataset Run ---" << std::endl;
 
     // --- Configuration ---
-    std::string data_base_dir = "../data";
+    std::string data_base_dir = "data";
     double initial_cash = 100000.0;
 
     // --- Define Datasets to Test ---
