@@ -7,6 +7,17 @@
 #include "strategies/MomentumIgnition.h"
 #include "strategies/PairsTrading.h"
 #include "strategies/LeadLagStrategy.h"
+#include "strategies/GBMStrategy.h"
+#include "strategies/OrnsteinUhlenbeckStrategy.h"
+#include "strategies/StochasticMLStrategy.h"
+#include "strategies/BayesianLinearRegressionStrategy.h"
+#include "strategies/GaussianProcessStrategy.h"
+#include "strategies/GradientBoostedTreesStrategy.h"
+#include "strategies/RandomForestStrategy.h"
+#include "strategies/StackingStrategy.h"
+#include "strategies/CrossValidationStrategy.h"
+#include "strategies/MLBridgeStrategy.h"
+#include "strategies/BayesianOnlineMLStrategy.h"
 
 #include <iostream>
 #include <string>
@@ -105,6 +116,28 @@ int main(int argc, char* argv[]) {
         available_strategies_this_iteration.push_back({"VWAP_2.0", [](){ return std::make_unique<VWAPReversion>(2.0, 100.0); }, {"stocks_april", "2024_only", "2024_2025"}});
         available_strategies_this_iteration.push_back({"ORB_30", [](){ return std::make_unique<OpeningRangeBreakout>(30, 100.0); }, {"stocks_april", "2024_only", "2024_2025"}});
         available_strategies_this_iteration.push_back({"Momentum_5_10_2_3", [](){ return std::make_unique<MomentumIgnition>(5, 10, 2.0, 3, 100.0); }, {"stocks_april", "2024_only", "2024_2025"}});
+        // --- New Strategies: Stochastic, ML, Bayesian, Ensemble ---
+        available_strategies_this_iteration.push_back({"GBM", [&](){ return std::make_unique<GBMStrategy>(msft_sym.empty() ? btc_sym : msft_sym); }, {"stocks_april", "2024_only", "2024_2025"}}); // Example: use first symbol
+        available_strategies_this_iteration.push_back({"OrnsteinUhlenbeck", [&](){ return std::make_unique<OrnsteinUhlenbeckStrategy>(msft_sym.empty() ? btc_sym : msft_sym); }, {"stocks_april", "2024_only", "2024_2025"}});
+        available_strategies_this_iteration.push_back({"StochasticML", [&](){ return std::make_unique<StochasticMLStrategy>(msft_sym.empty() ? btc_sym : msft_sym); }, {"stocks_april", "2024_only", "2024_2025"}});
+        available_strategies_this_iteration.push_back({"BayesianLinearRegression", [&](){ return std::make_unique<BayesianLinearRegressionStrategy>(msft_sym.empty() ? btc_sym : msft_sym); }, {"stocks_april", "2024_only", "2024_2025"}});
+        available_strategies_this_iteration.push_back({"GaussianProcess", [&](){ return std::make_unique<GaussianProcessStrategy>(msft_sym.empty() ? btc_sym : msft_sym); }, {"stocks_april", "2024_only", "2024_2025"}});
+        available_strategies_this_iteration.push_back({"GradientBoostedTrees", [&](){ return std::make_unique<GradientBoostedTreesStrategy>(msft_sym.empty() ? btc_sym : msft_sym); }, {"stocks_april", "2024_only", "2024_2025"}});
+        available_strategies_this_iteration.push_back({"RandomForest", [&](){ return std::make_unique<RandomForestStrategy>(msft_sym.empty() ? btc_sym : msft_sym); }, {"stocks_april", "2024_only", "2024_2025"}});
+        available_strategies_this_iteration.push_back({"Stacking", [&](){ return std::make_unique<StackingStrategy>(msft_sym.empty() ? btc_sym : msft_sym); }, {"stocks_april", "2024_only", "2024_2025"}});
+        available_strategies_this_iteration.push_back({"CrossValidation", [&](){ return std::make_unique<CrossValidationStrategy>(msft_sym.empty() ? btc_sym : msft_sym); }, {"stocks_april", "2024_only", "2024_2025"}});
+        available_strategies_this_iteration.push_back({"MLBridge", [&](){ return std::make_unique<MLBridgeStrategy>(msft_sym.empty() ? btc_sym : msft_sym); }, {"stocks_april", "2024_only", "2024_2025"}});
+
+        // Add our new Bayesian Online ML Strategy
+        available_strategies_this_iteration.push_back({"BayesianOnlineML", [&](){ 
+            return std::make_unique<BayesianOnlineMLStrategy>(
+                msft_sym.empty() ? btc_sym : msft_sym,  // symbol
+                50,                                      // feature_window
+                1,                                       // update_interval (1 min)
+                0.6,                                     // confidence_threshold
+                100.0                                    // position_size
+            ); 
+        }, {"stocks_april", "2024_only", "2024_2025"}});
 
         // Define Pairs Trading - capture CURRENT symbols correctly using [&]
         double pairs_trade_value = 10000.0; size_t pairs_lookback = 60; double pairs_entry_z = 2.0, pairs_exit_z = 0.5;

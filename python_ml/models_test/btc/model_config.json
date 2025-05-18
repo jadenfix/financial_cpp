@@ -1,0 +1,12 @@
+{
+  "model_type": "mock",
+  "features": [
+    "btc_open",
+    "btc_high",
+    "btc_low",
+    "btc_close",
+    "btc_volume"
+  ],
+  "version": "1.0.0",
+  "created_at": "2025-05-16T00:00:00Z"
+}

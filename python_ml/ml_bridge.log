@@ -1,0 +1,11 @@
+2025-05-15 10:04:27,435 - INFO - Making predictions using data from data/ml_data/processed_data_btc.csv
+2025-05-15 10:04:27,435 - INFO - Using model type: ensemble
+2025-05-15 10:04:27,437 - INFO - Reading data from data/ml_data/processed_data_btc.csv
+2025-05-15 10:04:28,151 - INFO - Set timestamp as index
+2025-05-15 10:04:28,151 - INFO - Making predictions for assets: ['btc', 'eth', 'ada', 'solana']
+2025-05-15 10:04:28,231 - WARNING - Error predicting for btc: No trained models available for prediction
+2025-05-15 10:04:28,231 - WARNING - Error predicting for eth: No trained models available for prediction
+2025-05-15 10:04:28,231 - WARNING - Error predicting for ada: No trained models available for prediction
+2025-05-15 10:04:28,231 - WARNING - Error predicting for solana: No trained models available for prediction
+2025-05-15 10:04:28,231 - WARNING - No valid predictions to save
+2025-05-15 10:06:00,964 - WARNING - Advanced models not available. Using basic models only.

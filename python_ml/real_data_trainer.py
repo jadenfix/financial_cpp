@@ -229,7 +229,27 @@ class RealDataTrainer:
             if model_type == 'ensemble':
                 # For ensemble, train all basic models
                 models_to_train.extend(['bayesian_ridge', 'gbm', 'random_forest', 
-                                      'gaussian_process', 'online_sgd'])
+                                      'online_sgd'])
+                # Add gaussian_process separately to handle memory constraints
+                if len(X_train) > 10000:
+                    print("Dataset is large. Training Gaussian Process on subset to avoid memory issues.")
+                    # Create a subsample for GP training
+                    subsample_size = min(5000, len(X_train))
+                    # Use systematic sampling to get a representative subset
+                    step = len(X_train) // subsample_size
+                    indices = np.arange(0, len(X_train), step)[:subsample_size]
+                    X_train_gp = X_train.iloc[indices]
+                    y_train_gp = y_train.iloc[indices]
+                    
+                    # Train GP separately
+                    try:
+                        print(f"Training gaussian_process on {len(X_train_gp)} samples...")
+                        ml_engine.models['gaussian_process'].fit(X_train_gp, y_train_gp)
+                        print("Finished training gaussian_process")
+                    except Exception as e:
+                        print(f"Error training gaussian_process: {e}")
+                else:
+                    models_to_train.append('gaussian_process')
             elif model_type == 'adaboost':
                 models_to_train.append('adaboost')
             elif model_type == 'xgboost':
@@ -243,8 +263,8 @@ class RealDataTrainer:
             elif model_type == 'hybrid_stacked' and ADVANCED_MODELS_AVAILABLE:
                 models_to_train.append('hybrid_stacked')
         
-        # Remove duplicates
-        models_to_train = list(set(models_to_train))
+        # Remove duplicates and 'gaussian_process' if it's already handled separately
+        models_to_train = [m for m in set(models_to_train) if m != 'gaussian_process' or 'gaussian_process' not in models_to_train]
         print(f"Training the following models: {models_to_train}")
         
         if hyperparameter_tuning:
@@ -273,30 +293,50 @@ class RealDataTrainer:
         
         # Evaluate each model type separately if not using ensemble
         for model_type in [mt for mt in self.model_types if mt != 'ensemble']:
-            if model_type == 'adaboost':
-                model_names = ['adaboost']
-            elif model_type == 'xgboost':
-                model_names = ['xgboost']
-            elif model_type == 'rnn' and ADVANCED_MODELS_AVAILABLE:
-                model_names = ['rnn_lstm', 'rnn_gru']
-            elif model_type == 'cnn' and ADVANCED_MODELS_AVAILABLE:
-                model_names = ['cnn']
-            elif model_type == 'pinn' and ADVANCED_MODELS_AVAILABLE:
-                model_names = ['pinn']
-            elif model_type == 'hybrid_stacked' and ADVANCED_MODELS_AVAILABLE:
-                model_names = ['hybrid_stacked']
-            else:
-                continue
-            
             try:
-                # Check if all required models are available
-                if all(model_name in ml_engine.models for model_name in model_names):
-                    pred, _ = ml_engine.predict(X_test, models_to_use=model_names)
+                if model_type == 'adaboost':
+                    model_names = ['adaboost']
+                elif model_type == 'xgboost':
+                    model_names = ['xgboost']
+                elif model_type == 'rnn' and ADVANCED_MODELS_AVAILABLE:
+                    model_names = ['rnn_lstm', 'rnn_gru']
+                elif model_type == 'cnn' and ADVANCED_MODELS_AVAILABLE:
+                    model_names = ['cnn']
+                elif model_type == 'pinn' and ADVANCED_MODELS_AVAILABLE:
+                    model_names = ['pinn']
+                elif model_type == 'hybrid_stacked' and ADVANCED_MODELS_AVAILABLE:
+                    model_names = ['hybrid_stacked']
+                else:
+                    continue
+                
+                # Print the models that will be used for evaluation
+                print(f"Evaluating {model_type} using models: {model_names}")
+                
+                # Check if all required models are available and valid
+                valid_models = []
+                for model_name in model_names:
+                    if model_name in ml_engine.models:
+                        # For advanced models, make sure the inner keras model exists
+                        if model_name in ['rnn_lstm', 'rnn_gru', 'cnn', 'pinn', 'hybrid_stacked']:
+                            inner_model = ml_engine.models[model_name].named_steps['model']
+                            if hasattr(inner_model, 'model') and inner_model.model is not None:
+                                valid_models.append(model_name)
+                            else:
+                                print(f"Model {model_name} exists but has no valid inner model")
+                        else:
+                            valid_models.append(model_name)
+                
+                if valid_models:
+                    print(f"Valid models for {model_type}: {valid_models}")
+                    pred, _ = ml_engine.predict(X_test, models_to_use=valid_models)
                     model_mse = mean_squared_error(y_test, pred)
                     model_r2 = r2_score(y_test, pred)
                     print(f"{model_type} Test MSE: {model_mse:.8f}")
                     print(f"{model_type} Test R²: {model_r2:.4f}")
                     model_results[model_type] = {'mse': model_mse, 'r2': model_r2}
+                else:
+                    print(f"No valid models available for {model_type}")
+                    
             except Exception as e:
                 print(f"Error evaluating {model_type}: {e}")
         
