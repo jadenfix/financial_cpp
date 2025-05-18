@@ -40,7 +40,8 @@ class RealDataTrainer:
     """Trainer for Bayesian ML models on real cryptocurrency data"""
     
     def __init__(self, data_dir='data/ml_data', model_dir='python_ml/models', 
-                 test_size=0.2, cv_splits=5, random_state=42, model_types=None):
+                 test_size=0.2, cv_splits=5, random_state=42, model_types=None,
+                 use_robust_cv=False):
         """
         Initialize the trainer
         
@@ -52,12 +53,14 @@ class RealDataTrainer:
             random_state: Random seed for reproducibility
             model_types: List of model types to train ('ensemble', 'rnn', 'cnn', 
                        'adaboost', 'xgboost', 'pinn', 'hybrid_stacked', or None for all)
+            use_robust_cv: Whether to use robust time series CV with purging and embargoes
         """
         self.data_dir = data_dir
         self.model_dir = model_dir
         self.test_size = test_size
         self.cv_splits = cv_splits
         self.random_state = random_state
+        self.use_robust_cv = use_robust_cv
         
         # Set model types to train
         if model_types is None:
@@ -195,13 +198,14 @@ class RealDataTrainer:
         
         return X, y, feature_cols
     
-    def train_model_for_asset(self, asset, hyperparameter_tuning=True):
+    def train_model_for_asset(self, asset, hyperparameter_tuning=True, extended_tuning=False):
         """
         Train a model for a specific asset with cross-validation and optional hyperparameter tuning
         
         Args:
             asset: Asset to train model for (e.g., 'btc', 'eth')
             hyperparameter_tuning: Whether to perform hyperparameter tuning
+            extended_tuning: Whether to use extended hyperparameter grids
             
         Returns:
             Trained model
@@ -212,6 +216,7 @@ class RealDataTrainer:
         X, y, feature_cols = self.prepare_features_and_target(asset)
         
         # Split data into training and testing sets
+        # For time series, always use the last portion as the test set
         split_idx = int(len(X) * (1 - self.test_size))
         X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
         y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
@@ -221,7 +226,7 @@ class RealDataTrainer:
         # Initialize the ML engine
         model_path = os.path.join(self.model_dir, asset)
         os.makedirs(model_path, exist_ok=True)
-        ml_engine = BayesianMLEngine(model_dir=model_path, use_advanced_models=ADVANCED_MODELS_AVAILABLE)
+        ml_engine = BayesianMLEngine(model_dir=model_path)
         
         # Get models to train based on model_types
         models_to_train = []
@@ -268,8 +273,8 @@ class RealDataTrainer:
         print(f"Training the following models: {models_to_train}")
         
         if hyperparameter_tuning:
-            print("Performing hyperparameter tuning...")
-            self._tune_hyperparameters(ml_engine, X_train, y_train, models_to_train)
+            print(f"Performing {'extended' if extended_tuning else 'standard'} hyperparameter tuning...")
+            self._tune_hyperparameters(ml_engine, X_train, y_train, models_to_train, extended_tuning)
         
         # Train the model
         print("Training final model...")
@@ -279,16 +284,30 @@ class RealDataTrainer:
         print("Evaluating on test set...")
         
         # For ensemble prediction (default behavior)
-        predictions, _ = ml_engine.predict(X_test)
+        predictions, uncertainty = ml_engine.predict(X_test)
         mse = mean_squared_error(y_test, predictions)
         r2 = r2_score(y_test, predictions)
         
         print(f"Ensemble Test MSE: {mse:.8f}")
         print(f"Ensemble Test R²: {r2:.4f}")
         
+        # Calculate and report uncertainty metrics
+        mean_uncertainty = np.mean(uncertainty)
+        print(f"Mean prediction uncertainty: {mean_uncertainty:.6f}")
+        
+        # Evaluate calibration - how well uncertainty predicts actual errors
+        abs_errors = np.abs(y_test - predictions)
+        calibration_corr = np.corrcoef(uncertainty, abs_errors)[0, 1]
+        print(f"Uncertainty calibration correlation: {calibration_corr:.4f}")
+        
         # Evaluate individual models if requested
         model_results = {
-            'ensemble': {'mse': mse, 'r2': r2}
+            'ensemble': {
+                'mse': mse, 
+                'r2': r2, 
+                'mean_uncertainty': mean_uncertainty,
+                'calibration_corr': calibration_corr
+            }
         }
         
         # Evaluate each model type separately if not using ensemble
@@ -354,7 +373,7 @@ class RealDataTrainer:
         
         return ml_engine
     
-    def _tune_hyperparameters(self, ml_engine, X, y, models_to_tune=None):
+    def _tune_hyperparameters(self, ml_engine, X, y, models_to_tune=None, extended_tuning=False):
         """
         Perform hyperparameter tuning using cross-validation
         
@@ -363,9 +382,15 @@ class RealDataTrainer:
             X: Training features
             y: Target values
             models_to_tune: List of model names to tune or None for all
+            extended_tuning: Whether to use extended hyperparameter grids
         """
-        # Create time series cross-validation
-        tscv = TimeSeriesSplit(n_splits=self.cv_splits)
+        # Create appropriate cross-validation strategy
+        if self.use_robust_cv:
+            print("Using robust time series cross-validation with purging and embargoes")
+            tscv = self._create_robust_time_series_cv(X)
+        else:
+            print(f"Using standard TimeSeriesSplit with {self.cv_splits} splits")
+            tscv = TimeSeriesSplit(n_splits=self.cv_splits)
         
         # Only tune models that are present in the engine
         if models_to_tune is None:
@@ -379,11 +404,22 @@ class RealDataTrainer:
                 xgb_model = ml_engine.models['xgboost'].named_steps['model']
                 
                 # Define parameter grid
-                param_grid = {
-                    'n_estimators': [50, 100, 200],
-                    'learning_rate': [0.01, 0.1, 0.2],
-                    'max_depth': [3, 5, 7]
-                }
+                if extended_tuning:
+                    param_grid = {
+                        'n_estimators': [50, 100, 200, 300],
+                        'learning_rate': [0.01, 0.05, 0.1, 0.2, 0.3],
+                        'max_depth': [3, 4, 5, 6, 7],
+                        'min_child_weight': [1, 2, 3],
+                        'subsample': [0.7, 0.8, 0.9, 1.0],
+                        'colsample_bytree': [0.7, 0.8, 0.9, 1.0],
+                        'gamma': [0, 0.1, 0.2]
+                    }
+                else:
+                    param_grid = {
+                        'n_estimators': [50, 100, 200],
+                        'learning_rate': [0.01, 0.1, 0.2],
+                        'max_depth': [3, 5, 7]
+                    }
                 
                 # Create grid search with cross-validation
                 grid_search = GridSearchCV(
@@ -413,11 +449,21 @@ class RealDataTrainer:
                 gbm_model = ml_engine.models['gbm'].named_steps['model']
                 
                 # Define parameter grid for GBM
-                gbm_param_grid = {
-                    'n_estimators': [50, 100, 200],
-                    'learning_rate': [0.01, 0.1, 0.2],
-                    'max_depth': [2, 3, 4]
-                }
+                if extended_tuning:
+                    gbm_param_grid = {
+                        'n_estimators': [50, 100, 200, 300],
+                        'learning_rate': [0.01, 0.05, 0.1, 0.2],
+                        'max_depth': [2, 3, 4, 5],
+                        'min_samples_split': [2, 5, 10],
+                        'min_samples_leaf': [1, 2, 4],
+                        'subsample': [0.7, 0.8, 0.9, 1.0]
+                    }
+                else:
+                    gbm_param_grid = {
+                        'n_estimators': [50, 100, 200],
+                        'learning_rate': [0.01, 0.1, 0.2],
+                        'max_depth': [2, 3, 4]
+                    }
                 
                 # Create grid search for GBM
                 gbm_grid_search = GridSearchCV(
@@ -447,11 +493,18 @@ class RealDataTrainer:
                 adaboost_model = ml_engine.models['adaboost'].named_steps['model']
                 
                 # Define parameter grid for AdaBoost
-                ada_param_grid = {
-                    'n_estimators': [50, 100, 200],
-                    'learning_rate': [0.01, 0.1, 1.0],
-                    'loss': ['linear', 'square', 'exponential']
-                }
+                if extended_tuning:
+                    ada_param_grid = {
+                        'n_estimators': [50, 100, 200, 300],
+                        'learning_rate': [0.01, 0.05, 0.1, 0.5, 1.0],
+                        'loss': ['linear', 'square', 'exponential']
+                    }
+                else:
+                    ada_param_grid = {
+                        'n_estimators': [50, 100, 200],
+                        'learning_rate': [0.01, 0.1, 1.0],
+                        'loss': ['linear', 'square', 'exponential']
+                    }
                 
                 # Create grid search for AdaBoost
                 ada_grid_search = GridSearchCV(
@@ -474,6 +527,49 @@ class RealDataTrainer:
                 ml_engine.models['adaboost'].named_steps['model'] = ada_grid_search.best_estimator_
             except Exception as e:
                 print(f"Error tuning AdaBoost: {e}")
+                
+        # Tune Random Forest if available
+        if 'random_forest' in models_to_tune:
+            try:
+                rf_model = ml_engine.models['random_forest'].named_steps['model']
+                
+                # Define parameter grid for Random Forest
+                if extended_tuning:
+                    rf_param_grid = {
+                        'n_estimators': [100, 200, 300],
+                        'max_depth': [None, 10, 20, 30],
+                        'min_samples_split': [2, 5, 10],
+                        'min_samples_leaf': [1, 2, 4],
+                        'max_features': ['sqrt', 'log2', None]
+                    }
+                else:
+                    rf_param_grid = {
+                        'n_estimators': [100, 200],
+                        'max_depth': [None, 20],
+                        'min_samples_split': [2, 5]
+                    }
+                
+                # Create grid search for Random Forest
+                rf_grid_search = GridSearchCV(
+                    estimator=rf_model,
+                    param_grid=rf_param_grid,
+                    cv=tscv,
+                    scoring='neg_mean_squared_error',
+                    n_jobs=-1,
+                    verbose=1
+                )
+                
+                # Fit grid search
+                rf_grid_search.fit(X, y)
+                
+                # Print best parameters
+                print(f"Best Random Forest parameters: {rf_grid_search.best_params_}")
+                print(f"Best Random Forest MSE: {-rf_grid_search.best_score_:.8f}")
+                
+                # Update the model with best parameters
+                ml_engine.models['random_forest'].named_steps['model'] = rf_grid_search.best_estimator_
+            except Exception as e:
+                print(f"Error tuning Random Forest: {e}")
     
     def _plot_predictions(self, asset, y_true, y_pred, index):
         """
@@ -500,19 +596,21 @@ class RealDataTrainer:
         plt.savefig(os.path.join(plot_dir, f'{asset}_predictions.png'))
         plt.close()
     
-    def train_all_models(self, assets=None, hyperparameter_tuning=True):
+    def train_all_models(self, assets=None, hyperparameter_tuning=True, extended_tuning=False):
         """
         Train models for all specified assets
         
         Args:
             assets: List of assets to train models for or None for all available
             hyperparameter_tuning: Whether to perform hyperparameter tuning
+            extended_tuning: Whether to use extended hyperparameter grids
         """
         if assets is None:
             assets = list(self.datasets.keys())
         
         for asset in assets:
-            self.train_model_for_asset(asset, hyperparameter_tuning)
+            print(f"\n===== Training models for {asset.upper()} with {'extended' if extended_tuning else 'standard'} tuning =====")
+            self.train_model_for_asset(asset, hyperparameter_tuning=hyperparameter_tuning, extended_tuning=extended_tuning)
         
         # Save feature information
         self.save_feature_info()
@@ -523,6 +621,40 @@ class RealDataTrainer:
             feature_file = os.path.join(self.model_dir, asset, 'feature_cols.txt')
             with open(feature_file, 'w') as f:
                 f.write('\n'.join(result['feature_cols']))
+
+    def _create_robust_time_series_cv(self, X, embargo_size=5):
+        """
+        Create a time series cross-validation with purging and embargoes
+        
+        Args:
+            X: Feature dataframe with datetime index
+            embargo_size: Number of samples to embargo between train and test sets
+            
+        Returns:
+            A generator of train/test indices for cross-validation
+        """
+        n_samples = len(X)
+        indices = np.arange(n_samples)
+        
+        # Determine fold size
+        fold_size = n_samples // (self.cv_splits + 1)  # +1 to ensure test sets don't overlap
+        
+        for i in range(self.cv_splits):
+            # Start with a rolling window approach
+            test_start = n_samples - (i + 1) * fold_size
+            test_end = n_samples - i * fold_size
+            
+            # Apply embargo: remove samples before test set
+            if embargo_size > 0 and test_start > embargo_size:
+                train_end = test_start - embargo_size
+            else:
+                train_end = test_start
+            
+            # Get train/test indices
+            train_indices = indices[:train_end]
+            test_indices = indices[test_start:test_end]
+            
+            yield train_indices, test_indices
 
 def main():
     """Main function to train models using real data"""

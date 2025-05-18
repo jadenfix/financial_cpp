@@ -1,0 +1,17 @@
+{
+  "coin": "btc",
+  "target_column": "target_next_close_btc",
+  "timestamp": "2025-05-17T22:18:44.814484",
+  "num_features": 40,
+  "train_samples": 171644,
+  "test_samples": 42911,
+  "models": [
+    "bayesian_ridge",
+    "gradient_boosting",
+    "random_forest",
+    "adaboost",
+    "xgboost",
+    "neural_network"
+  ],
+  "best_model": "bayesian_ridge"
+}
