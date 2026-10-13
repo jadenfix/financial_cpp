@@ -18,6 +18,7 @@ import numpy as np
 import argparse
 from datetime import datetime
 import traceback
+from contextlib import redirect_stdout
 
 # Add python_ml to the path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,7 +33,8 @@ except ImportError:
 
 # Import ML classes
 try:
-    from python_ml.bayesian_ml_engine import BayesianMLEngine
+    with redirect_stdout(sys.stderr):
+        from python_ml.bayesian_ml_engine import BayesianMLEngine
     ML_ENGINE_AVAILABLE = True
 except ImportError:
     ML_ENGINE_AVAILABLE = False
@@ -84,12 +86,9 @@ class MLPredictor:
                 traceback.print_exc()
                 self.ml_engine = None
         
-        # If real ML engine didn't load, try using mock as fallback
-        if self.ml_engine is None and MOCK_MODEL_AVAILABLE:
-            print(f"Using mock ML engine for {asset} (fallback)", file=sys.stderr)
-            self.ml_engine = MockMLEngine(model_dir=self.model_dir)
-            self.using_mock = True
-        
+        if self.ml_engine is None:
+            raise RuntimeError("No trained model loaded; use --use-mock only for explicit integration fixtures")
+
         # Load feature columns
         self.feature_cols = self._load_feature_cols()
     
@@ -125,8 +124,7 @@ class MLPredictor:
         """
         # If ML engine is not available, return defaults
         if self.ml_engine is None:
-            print(f"Using dummy prediction due to missing ML engine", file=sys.stderr)
-            return 0.0, 1.0
+            raise RuntimeError("No ML engine loaded")
             
         # Convert dict to DataFrame if needed
         if isinstance(data_row, dict):
@@ -171,9 +169,7 @@ class MLPredictor:
             prediction, uncertainty = self.ml_engine.predict_with_uncertainty(X)
             return prediction[0], uncertainty[0]
         except Exception as e:
-            print(f"Error during prediction: {e}. Returning default values.", file=sys.stderr)
-            traceback.print_exc()
-            return 0.0, 1.0  # Return neutral prediction with high uncertainty
+            raise RuntimeError(f"Model prediction failed: {e}") from e
 
 def parse_input():
     """Parse input data from stdin or file"""
@@ -240,14 +236,13 @@ def main():
         data, args = parse_input()
         
         # Create predictor
-        predictor = MLPredictor(
-            model_dir=args.model_dir, 
-            asset=args.asset,
-            use_mock=args.use_mock
-        )
-        
-        # Make prediction
-        prediction, uncertainty = predictor.predict(data)
+        with redirect_stdout(sys.stderr):
+            predictor = MLPredictor(
+                model_dir=args.model_dir,
+                asset=args.asset,
+                use_mock=args.use_mock
+            )
+            prediction, uncertainty = predictor.predict(data)
         
         # Print result to stdout (as CSV)
         print(f"{prediction},{uncertainty}")
@@ -255,7 +250,6 @@ def main():
         sys.stderr.write(f"Prediction complete: {prediction}, {uncertainty}\n")
         return 0
     except Exception as e:
-        print(f"0.0,1.0")  # Output default values
         sys.stderr.write(f"Error in main: {e}\n")
         traceback.print_exc(file=sys.stderr)
         return 1

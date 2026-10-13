@@ -1,3 +1,8 @@
 *.joblib filter=lfs diff=lfs merge=lfs -text
 *.csv filter=lfs diff=lfs merge=lfs -text
 *.txt filter=lfs diff=lfs merge=lfs -text
+
+# Build/dependency manifests stay readable without downloading market history.
+CMakeLists.txt -filter -diff -merge
+cpp/CMakeLists.txt -filter -diff -merge
+python_ml/requirements.txt -filter -diff -merge

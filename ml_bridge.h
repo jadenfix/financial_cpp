@@ -12,6 +12,9 @@
 #include <stdexcept>
 #include <fstream>
 #include <regex>
+#include <cmath>
+#include <filesystem>
+#include <unistd.h>
 
 /**
  * @brief ML Bridge for calling Python ML models from C++
@@ -33,10 +36,10 @@ public:
      */
     MLBridge(
         const std::string& pythonPath = "python3", 
-        const std::string& scriptPath = "/Users/jadenfix/financial_cpp-1/python_ml/ml_predictor.py",
-        const std::string& modelDir = "/Users/jadenfix/financial_cpp-1/python_ml/models_test",
+        const std::string& scriptPath = "python_ml/ml_predictor.py",
+        const std::string& modelDir = "python_ml/models",
         const std::string& asset = "btc",
-        bool useMock = true,
+        bool useMock = false,
         bool loadFeatureCols = true
     ) : pythonPath_(pythonPath), 
         scriptPath_(scriptPath),
@@ -137,7 +140,17 @@ public:
         jsonData += "}";
         
         // Write JSON to temporary file to avoid stdin issues
-        std::string tempFilePath = "/tmp/ml_bridge_input.json";
+        std::string pattern = (std::filesystem::temp_directory_path() / "ml-bridge-XXXXXX").string();
+        std::vector<char> writable(pattern.begin(), pattern.end());
+        writable.push_back('\0');
+        int descriptor = mkstemp(writable.data());
+        if (descriptor < 0) throw std::runtime_error("Failed to create private input file");
+        close(descriptor);
+        std::string tempFilePath(writable.data());
+        struct RemoveInput {
+            std::string path;
+            ~RemoveInput() { std::remove(path.c_str()); }
+        } removeInput{tempFilePath};
         std::ofstream tempFile(tempFilePath);
         if (!tempFile.is_open()) {
             std::cerr << "Error creating temporary file: " << tempFilePath << std::endl;
@@ -147,12 +160,18 @@ public:
         tempFile.close();
         
         // Create command with absolute paths and input file
-        std::string command = pythonPath_ + " " + 
-                             scriptPath_ + " " +
-                             "--model-dir " + modelDir_ + " " +
-                             "--asset " + asset_ + " " +
-                             "--json-input " +
-                             "--input-file " + tempFilePath;
+        const auto quote = [](const std::string& argument) {
+            std::string escaped = "'";
+            for (char character : argument) {
+                if (character == '\'') escaped += "'\\''";
+                else escaped += character;
+            }
+            return escaped + "'";
+        };
+        std::string command = quote(pythonPath_) + " " + quote(scriptPath_) +
+                             " --model-dir " + quote(modelDir_) +
+                             " --asset " + quote(asset_) +
+                             " --json-input --input-file " + quote(tempFilePath);
                              
         // Add use-mock flag if needed
         if (useMock_) {
@@ -233,6 +252,9 @@ public:
             throw std::runtime_error("Empty prediction result");
         }
         
+        if (!std::isfinite(prediction) || !std::isfinite(uncertainty) || uncertainty < 0) {
+            throw std::runtime_error("Prediction and nonnegative uncertainty must be finite");
+        }
         return {prediction, uncertainty};
     }
     

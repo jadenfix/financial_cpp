@@ -1,0 +1,20 @@
+name: Native C++ Python model bridge
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  bridge:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r python_ml/requirements.txt
+      - run: make all test PYTHON=python
+      - run: python scripts/backtester-e2e.py
