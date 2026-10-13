@@ -27,3 +27,7 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ffmpeg
       - run: python scripts/verify-accounting-demo.py
+      - name: Verify tests leave checkout clean
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
