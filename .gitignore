@@ -4,3 +4,7 @@ build/
 trading_system # Your specific executable name
 .DS_Store # macOS specific file
 .vscode/
+
+# Python runtime caches are generated locally and are never source artifacts.
+__pycache__/
+*.py[cod]

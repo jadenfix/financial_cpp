@@ -51,44 +51,56 @@ public:
     // --- handle_fill_event, update_market_values, record_equity ---
     // --- (same as previous correct version) ---
     void handle_fill_event(const FillEvent& event) {
+        if (event.symbol.empty() || !std::isfinite(event.quantity) || event.quantity <= 0.0 ||
+            !std::isfinite(event.fill_price) || event.fill_price <= 0.0 ||
+            !std::isfinite(event.commission) || event.commission < 0.0) {
+            std::cerr << "PORTFOLIO WARN: Ignoring invalid fill for '" << event.symbol << "'." << std::endl;
+            return;
+        }
+
         num_fills_++;
         total_commission_ += event.commission;
-        current_cash_ -= event.commission;
         Position& pos = positions_[event.symbol];
-        double position_change_value = event.quantity * event.fill_price;
-        double previous_quantity = pos.quantity;
-        double previous_avg_price = pos.average_price;
+        const double previous_quantity = pos.quantity;
+        const double previous_avg_price = pos.average_price;
+        const double signed_delta =
+            event.direction == OrderDirection::BUY ? event.quantity : -event.quantity;
+        const double new_quantity = previous_quantity + signed_delta;
+        constexpr double quantity_epsilon = 1e-9;
 
-        bool closing_long = (previous_quantity > 1e-9 && (previous_quantity - event.quantity) < 1e-9 && event.direction == OrderDirection::SELL);
-        bool closing_short = (previous_quantity < -1e-9 && (previous_quantity + event.quantity) > -1e-9 && event.direction == OrderDirection::BUY);
-        if (closing_long || closing_short) {
-             double quantity_closed = std::min(std::abs(previous_quantity), event.quantity);
-             double pnl_per_share = (event.direction == OrderDirection::SELL) ? (event.fill_price - previous_avg_price) : (previous_avg_price - event.fill_price);
-             double realized_for_this_trade = quantity_closed * pnl_per_share;
-             realized_pnl_ += realized_for_this_trade;
-             std::cout << "PORTFOLIO: Realized PnL on close: " << realized_for_this_trade << std::endl;
+        const bool had_position = std::abs(previous_quantity) > quantity_epsilon;
+        const bool same_direction = had_position &&
+            ((previous_quantity > 0.0 && signed_delta > 0.0) ||
+             (previous_quantity < 0.0 && signed_delta < 0.0));
+        const bool opposing_direction = had_position && !same_direction;
+
+        if (opposing_direction) {
+            const double quantity_closed = std::min(std::abs(previous_quantity), std::abs(signed_delta));
+            const double position_sign = previous_quantity > 0.0 ? 1.0 : -1.0;
+            const double realized_for_this_trade =
+                quantity_closed * (event.fill_price - previous_avg_price) * position_sign;
+            realized_pnl_ += realized_for_this_trade;
+            std::cout << "PORTFOLIO: Realized PnL on close: " << realized_for_this_trade << std::endl;
         }
 
-        if (event.direction == OrderDirection::BUY) {
-            current_cash_ -= position_change_value;
-            pos.quantity += event.quantity;
-        } else {
-            current_cash_ += position_change_value;
-            pos.quantity -= event.quantity;
-        }
+        current_cash_ -= signed_delta * event.fill_price + event.commission;
+        pos.quantity = std::abs(new_quantity) < quantity_epsilon ? 0.0 : new_quantity;
 
-        if (std::abs(pos.quantity) < 1e-9) {
-             pos.average_price = 0.0;
+        if (pos.quantity == 0.0) {
+            pos.average_price = 0.0;
+        } else if (!had_position) {
+            pos.average_price = event.fill_price;
+        } else if (same_direction) {
+            pos.average_price =
+                (std::abs(previous_quantity) * previous_avg_price +
+                 std::abs(signed_delta) * event.fill_price) /
+                std::abs(pos.quantity);
+        } else if ((previous_quantity > 0.0) == (pos.quantity > 0.0)) {
+            // A partial close never changes the cost basis of the remaining position.
+            pos.average_price = previous_avg_price;
         } else {
-             if ( (event.direction == OrderDirection::BUY && previous_quantity >= -1e-9) || (event.direction == OrderDirection::SELL && previous_quantity <= 1e-9) ) {
-                 if (std::abs(previous_quantity) > 1e-9) {
-                     pos.average_price = ( (std::abs(previous_quantity) * previous_avg_price) + std::abs(position_change_value) ) / std::abs(pos.quantity);
-                 } else {
-                      pos.average_price = event.fill_price;
-                 }
-             } else if ( (event.direction == OrderDirection::BUY && previous_quantity < -1e-9) || (event.direction == OrderDirection::SELL && previous_quantity > 1e-9)) {
-                 pos.average_price = event.fill_price;
-             }
+            // The fill crossed through flat. Only the residual opens at the fill price.
+            pos.average_price = event.fill_price;
         }
         std::cout << "PORTFOLIO: Fill - Sym: " << event.symbol << ", Dir: " << (event.direction == OrderDirection::BUY ? "BUY" : "SELL") << ", Qty: " << event.quantity << " @ " << event.fill_price << ", NewPos: " << pos.quantity << ", AvgPx: " << pos.average_price << ", Cash: " << current_cash_ << std::endl;
         update_market_values({{event.symbol, PriceBar{event.timestamp, 0,0,0, event.fill_price, 0}}});
