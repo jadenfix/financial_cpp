@@ -1,3 +1,23 @@
+## Reproducible native validation
+
+`make all test` builds the portable C++ bridge and executes a real persisted
+BayesianRidge model through the Python predictor. The gate trains a bounded
+synthetic fixture, checks concurrent C++ requests against direct model predictions,
+exercises paths containing spaces, and rejects missing model files. Install
+`python -m pip install -r python_ml/requirements.txt` first.
+
+The bridge defaults to real models. Mock models require an explicit flag and are
+for integration fixtures; unavailable models and prediction failures now fail
+rather than silently returning fabricated predictions. The Python protocol emits
+one CSV result on stdout and diagnostics on stderr.
+
+`make backtester` builds the historical event-driven C++ backtester with the
+included, pinned csv2 headers. Full market history is optional Git LFS data; the
+build and bridge E2E require no multi-GB download. The actual historical backtester gate completes 68 strategy/dataset
+configurations on 11 generated 64-row OHLCV files:
+`python3 scripts/backtester-e2e.py`. Current validation does not establish
+trading profitability, full-history training, or live-order behavior.
+
 # Financial C++/Python ML Trading System
 
 This project implements a Bayesian machine learning trading system with a C++ trading engine and Python ML components.

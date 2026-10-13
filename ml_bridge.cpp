@@ -20,9 +20,10 @@ int main(int argc, char* argv[]) {
     std::cout << "==============" << std::endl;
     
     // Get absolute paths
-    std::string pythonPath = "python3";
-    std::string scriptPath = "/Users/jadenfix/financial_cpp-1/python_ml/ml_predictor.py";
-    std::string modelDir = "/Users/jadenfix/financial_cpp-1/python_ml/models_test";
+    std::string pythonPath = argc > 2 ? argv[2] : "python3";
+    std::string scriptPath = argc > 3 ? argv[3] : "python_ml/ml_predictor.py";
+    std::string modelDir = argc > 1 ? argv[1] : "python_ml/models";
+    int failures = 0;
     
     try {
         // Create ML Bridge
@@ -44,6 +45,7 @@ int main(int argc, char* argv[]) {
             std::cout << "Prediction: " << pred1 << std::endl;
             std::cout << "Uncertainty: " << uncert1 << std::endl;
         } catch (const std::exception& e) {
+            ++failures;
             std::cerr << "Test 1 failed: " << e.what() << std::endl;
         }
         
@@ -66,6 +68,7 @@ int main(int argc, char* argv[]) {
             std::cout << "Prediction: " << pred2 << std::endl;
             std::cout << "Uncertainty: " << uncert2 << std::endl;
         } catch (const std::exception& e) {
+            ++failures;
             std::cerr << "Test 2 failed: " << e.what() << std::endl;
         }
         
@@ -111,6 +114,7 @@ int main(int argc, char* argv[]) {
                 // Update current price for next iteration
                 currentPrice = newPrice;
             } catch (const std::exception& e) {
+                ++failures;
                 std::cerr << "Iteration " << (i+1) << " failed: " << e.what() << std::endl;
                 break;
             }
@@ -119,6 +123,7 @@ int main(int argc, char* argv[]) {
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
         
+        if (failures) return 1;
         std::cout << "\nAll tests completed!" << std::endl;
         
     } catch (const std::exception& e) {
