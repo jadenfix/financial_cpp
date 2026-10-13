@@ -1,5 +1,18 @@
 ## Reproducible native validation
 
+![Signed-delta accounting replay](docs/demo/accounting-workflow.gif)
+
+The demo above is generated from an actual native C++ replay: it opens and adds
+to a long position, partially and fully closes it, opens a short, then crosses
+through flat into a new long. The receipt, source manifest, MP4, GIF, and verifier
+live in [`docs/demo`](docs/demo). Reproduce the accounting gates with
+`make accounting-test`, the 68-configuration executable smoke with
+`python3 scripts/backtester-e2e.py`, and the published-media proof with
+`python3 scripts/verify-accounting-demo.py`.
+
+This is deterministic simulated accounting over fixture fills. It does not place
+live orders or establish profitability, execution quality, or latency.
+
 `make all test` builds the portable C++ bridge and executes a real persisted
 BayesianRidge model through the Python predictor. The gate trains a bounded
 synthetic fixture, checks concurrent C++ requests against direct model predictions,

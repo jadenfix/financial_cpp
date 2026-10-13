@@ -1,0 +1,66 @@
+{
+  "source_commit": "d4b0acc6cde5475f532c76a7f310e9f2a357d7cb",
+  "source_tree": "f73563a87d30a16632156985ad8730073632c59f",
+  "runtime_inputs": [
+    {
+      "path": "examples/accounting_demo.cpp",
+      "git_blob": "b5ec93312652d071559ba7ede61d40372acd7c96",
+      "sha256": "1c7c4ff6e5140d515758ab31d154af1f7ab16047a309198fd4afcd3049bced32"
+    },
+    {
+      "path": "src/core/Portfolio.h",
+      "git_blob": "dd68a3b4e23920c0abe29f8040a5af349d720c4a",
+      "sha256": "6e8f0b75382190624b800232bb13ebe1c2d49bec5021fe835091201562adc466"
+    },
+    {
+      "path": "src/core/Event.h",
+      "git_blob": "f734bd7c9056a012effcac89c648f023d8e2a06f",
+      "sha256": "a624bcda8cf268cff969601eda85ca4feff879d291934c95f9302dd057430f14"
+    },
+    {
+      "path": "src/core/Utils.h",
+      "git_blob": "6c5605fc01a0274b248135ff804af66562381d65",
+      "sha256": "ca70ca0c0aac6d85526aeaef385703bd14c815bf3aa470ab061d57a6ba3b30fb"
+    },
+    {
+      "path": "src/data/PriceBar.h",
+      "git_blob": "8dc7c79449ca176fbad25bdd740db647c87977d3",
+      "sha256": "8d72e50638c950ca26080356a63907b647f396c3196b6620a88cbed260a7946a"
+    }
+  ],
+  "scope": "deterministic simulated fills; no brokerage, exchange, live market, profit, or latency claim",
+  "recording": {
+    "frames": 72,
+    "fps": 6,
+    "duration_seconds": 12.0,
+    "width": 1280,
+    "height": 720
+  },
+  "observations": {
+    "transitions": 6,
+    "partial_close_position": 11.0,
+    "partial_close_basis": 106.666667,
+    "partial_close_realized_pnl": 93.333333,
+    "final_position": 3.0,
+    "final_average_price": 90.0,
+    "final_realized_pnl": -40.0
+  },
+  "artifacts": {
+    "accounting-receipt.csv": {
+      "bytes": 628,
+      "sha256": "379b52c7e5781a50a37585ea58448978eb24b0f70fe843ca110e2e852b0fe87d"
+    },
+    "accounting-poster.png": {
+      "bytes": 48383,
+      "sha256": "774e0022d66fed56fa73d1dc00b03b706e86d8a8511fa9c1aea97e437a2681cc"
+    },
+    "accounting-workflow.mp4": {
+      "bytes": 84103,
+      "sha256": "cda6a3044aec91f8c636fab57c579262b1e54a9a278d9dcf46b57fc68ed0a7f4"
+    },
+    "accounting-workflow.gif": {
+      "bytes": 121109,
+      "sha256": "06d606fa11fb74064dc40cf9d4bbe106fb0eda3053b85a80f018eae4a90f3995"
+    }
+  }
+}

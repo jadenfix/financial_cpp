@@ -17,4 +17,12 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -r python_ml/requirements.txt
       - run: make all test PYTHON=python
+      - run: make accounting-test PYTHON=python
       - run: python scripts/backtester-e2e.py
+      - name: Install ffmpeg on Ubuntu
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install ffmpeg on macOS
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - run: python scripts/verify-accounting-demo.py
