@@ -6,3 +6,6 @@
 CMakeLists.txt -filter -diff -merge
 cpp/CMakeLists.txt -filter -diff -merge
 python_ml/requirements.txt -filter -diff -merge
+
+# Demo receipts are small, reviewable provenance artifacts rather than datasets.
+docs/demo/*.csv -filter -diff -merge text
