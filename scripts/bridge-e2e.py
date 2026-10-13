@@ -31,7 +31,11 @@ def main():
         subprocess.run([os.environ.get("CXX", "c++"), "-std=c++17", "-O2", "-Wall", "-Wextra", str(ROOT / "tests/bridge_driver.cpp"), "-o", str(driver)], check=True)
 
         def predict(close):
-            result = subprocess.run([str(driver), sys.executable, str(ROOT / "python_ml/ml_predictor.py"), str(asset.parent), str(close)], capture_output=True, text=True, timeout=60, check=True)
+            result = subprocess.run([str(driver), sys.executable, str(ROOT / "python_ml/ml_predictor.py"), str(asset.parent), str(close)], capture_output=True, text=True, timeout=60)
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"bridge failed for close={close}: stdout={result.stdout!r}, stderr={result.stderr!r}"
+                )
             line = next(line for line in result.stdout.splitlines() if line.startswith("BRIDGE_RESULT "))
             observed, uncertainty = map(float, line.removeprefix("BRIDGE_RESULT ").split(","))
             expected = model.predict([[close, close + 100, close - 100, close, 1000]])[0]

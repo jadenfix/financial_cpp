@@ -8,6 +8,7 @@
 #include <memory>
 #include <iostream> // For cout/cerr
 #include <algorithm> // For std::max, std::abs
+#include <cmath>
 
 class ExecutionHandler {
 private:
@@ -17,11 +18,21 @@ public:
     explicit ExecutionHandler(EventQueue& queue) : event_queue_(queue) {}
 
     void handle_order_event(const OrderEvent& order_event, const MarketEvent& next_market_event) {
+        if (order_event.symbol.empty() || !std::isfinite(order_event.quantity) || order_event.quantity <= 0.0) {
+            std::cerr << "SIM EXEC WARN: Rejected invalid order quantity for '"
+                      << order_event.symbol << "'." << std::endl;
+            return;
+        }
         if (order_event.order_type == OrderType::MARKET) {
             auto symbol_iter = next_market_event.data.find(order_event.symbol);
             if (symbol_iter != next_market_event.data.end()) {
                 const PriceBar& next_bar = symbol_iter->second;
                 double fill_price = next_bar.Open;
+                if (!std::isfinite(fill_price) || fill_price <= 0.0) {
+                    std::cerr << "SIM EXEC WARN: Rejected invalid market price for "
+                              << order_event.symbol << "." << std::endl;
+                    return;
+                }
                 double commission = calculate_commission(order_event.quantity, fill_price);
 
                 std::cout << "SIM EXEC: Order for " << order_event.quantity << " " << order_event.symbol

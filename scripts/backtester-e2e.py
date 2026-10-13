@@ -11,11 +11,31 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def main():
-    cmake = os.environ.get("CMAKE", "cmake")
+    compiler = os.environ.get("CXX", "c++")
     with tempfile.TemporaryDirectory(prefix="financial-backtester-e2e-") as directory:
         root = Path(directory)
-        subprocess.run([cmake, "-S", str(ROOT), "-B", str(root / "build")], check=True)
-        subprocess.run([cmake, "--build", str(root / "build"), "-j2"], check=True)
+        build = root / "build"
+        build.mkdir()
+        subprocess.run(
+            [
+                compiler,
+                "-std=c++17",
+                "-O2",
+                "-Wall",
+                "-Wextra",
+                "-Wpedantic",
+                "-Wno-unused-parameter",
+                "-I",
+                str(ROOT / "src"),
+                "-I",
+                str(ROOT / "external/csv2/include"),
+                str(ROOT / "src/main.cpp"),
+                str(ROOT / "src/data/DataManager.cpp"),
+                "-o",
+                str(build / "trading_system"),
+            ],
+            check=True,
+        )
         datasets = {
             "stocks_april": ["quant_seconds_data_MSFT", "quant_seconds_data_NVDA", "quant_seconds_data_google"],
             "2024_only": ["btc_2024_data", "eth_2024_data", "sol_2024_data", "ada_2024_data"],
@@ -38,9 +58,9 @@ def main():
         assert "No strategy results" not in result.stdout
         assert "ERROR:" not in result.stdout + result.stderr
         completed = result.stdout.count("===== Finished Strategy:")
-        assert completed > 0
+        assert completed == 68, completed
         assert "Comprehensive Run Invocation Complete" in result.stdout
-        print(f"PASS: real backtester completed {completed} strategy/dataset configurations on 11 persisted 64-row OHLCV files")
+        print(f"PASS: real backtester completed exactly {completed} strategy/dataset configurations on 11 persisted 64-row OHLCV files")
 
 
 if __name__ == "__main__":

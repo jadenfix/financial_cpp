@@ -74,6 +74,11 @@ add_executable(trading_system
     # Add other source groups here if needed (e.g., ${INDICATOR_SOURCES})
 )
 
+add_executable(accounting_tests tests/accounting_test.cpp)
+target_include_directories(accounting_tests PRIVATE src)
+enable_testing()
+add_test(NAME accounting_transitions COMMAND accounting_tests)
+
 # --- Include Directories ---
 # Tell the 'trading_system' target where to find header files during compilation.
 target_include_directories(trading_system PRIVATE
